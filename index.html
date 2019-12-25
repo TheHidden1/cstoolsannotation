@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta http-equiv="X-UA-Compatible" content="ie=edge" />
+		<title>toolAnnotaionBugBug</title>
+		<style>
+			.container {
+				position: absolute;
+				top: 0;
+				left: 0;
+				height: 100%;
+				width: 100%;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				flex-wrap: wrap;
+				background: #fefefe;
+
+				overflow: none;
+			}
+			.cornerstone-view {
+				margin: 2rem;
+				border-radius: 1rem;
+				border: 1px dashed blue;
+				height: 60%;
+				width: 40%;
+				background: black;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div id="first-element" class="cornerstone-view"></div>
+			<div id="second-element" class="cornerstone-view"></div>
+		</div>
+		!-- Dependencies -->
+		<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+		<script src="https://cdn.jsdelivr.net/npm/cornerstone-math@0.1.8/dist/cornerstoneMath.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/cornerstone-core@2.3.0/dist/cornerstone.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/dicom-parser@1.8.4/dist/dicomParser.js"></script>
+
+		<script src="https://cdn.jsdelivr.net/npm/cornerstone-wado-image-loader@3.0.6/dist/cornerstoneWADOImageLoader.js"></script>
+		<!-- development version, includes helpful console warnings -->
+		<script src="https://cdn.jsdelivr.net/npm/cornerstone-tools@4.9.0/dist/cornerstoneTools.js"></script>
+
+		<script>
+			// cornerstone Wado Image Loader
+			const imageLoaderConfig = {
+				webWorkerPath: '/WADOImageLoader/webworkers/cornerstoneWADOImageLoaderWebWorker.js',
+				maxWebWorkers: Math.max(navigator.hardwareConcurrency - 1, 1),
+				startWebWorkersOnDemand: true,
+				taskConfiguration: {
+					decodeTask: {
+						codecsPath: '../codecs/cornerstoneWADOImageLoaderCodecs.js',
+						initializeCodecsOnStartup: true,
+						usePDFJS: true,
+						strict: true,
+					},
+				},
+			};
+
+			const cornerStoneConfig = {
+				touchEnabled: true,
+			};
+			const stackPrefetchConfig = {
+				maxImagesToPrefetch: 20,
+				maxSimultaneousRequests: 4,
+			};
+			// Specify external dependencies
+			cornerstoneTools.external.cornerstone = cornerstone;
+			cornerstoneTools.external.cornerstoneMath = cornerstoneMath;
+			cornerstoneTools.external.Hammer = Hammer;
+
+			localStorage.setItem('debug', 'cornerstoneTools');
+			cornerstoneTools.init(cornerStoneConfig);
+			// init cornerstoneTools prefetch config
+			cornerstoneTools.stackPrefetch.setConfiguration(stackPrefetchConfig);
+			cornerstoneWADOImageLoader.webWorkerManager.initialize(imageLoaderConfig);
+			cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+			cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
+		</script>
+		<script>
+			cornerstoneOptions = {
+				renderer: 'webgl',
+			};
+			const imageIds = ['wadouri:/study/image-000001.dcm', 'wadouri:/study/image-000002.dcm', 'wadouri:/study/image-000003.dcm', 'wadouri:/study/image-000004.dcm', 'wadouri:/study/image-000005.dcm', 'wadouri:/study/image-000006.dcm', 'wadouri:/study/image-000007.dcm'];
+
+			const InitAndLoadData = anElement => {
+				cornerstone.events.addEventListener(cornerstone.EVENTS.ELEMENT_ENABLED, evt => {
+					const element = evt.detail.element;
+					if (element === anElement) {
+						onElementEnabled(element)
+					}
+				});
+				cornerstone.enable(anElement, cornerstoneOptions);
+			};
+
+			const onElementEnabled = element => {
+				const stack = { currentImageIdIndex: 0, imageIds: imageIds };
+				// clear any previous tool state
+				cornerstoneTools.clearToolState(element, 'stack');
+				// Add the stack tool state to the enabled element, and
+
+				// add stack state managers for the stack tool, CINE tool, and reference lines
+				cornerstoneTools.addStackStateManager(element, ['stack', 'playClip', 'referenceLines']);
+				let imagePromise;
+				const firstImageId = stack.imageIds[stack.currentImageIdIndex];
+				imagePromise = cornerstone.loadAndCacheImage(firstImageId);
+
+				imagePromise.then(image => {
+					cornerstoneTools.addToolState(element, 'stack', stack);
+					// Set Soft Tissue preset for all images by default
+					const viewport = cornerstone.getDefaultViewportForImage(element, image);
+					viewport.colormap = 'gray';
+					// Display the first image
+					cornerstone.displayImage(element, image, viewport);
+					cornerstoneTools.stackPrefetch.enable(element);
+					// cornerstoneTools.addToolForElement(element, cornerstoneTools.StackScrollMouseWheelTool);
+					// cornerstoneTools.setToolEnabledForElement(element, 'StackScrollMouseWheel');
+					cornerstoneTools.addToolForElement(element, cornerstoneTools.CircleRoiTool);
+					cornerstoneTools.setToolActiveForElement(element, 'CircleRoi', {
+						mouseButtonMask: [1],
+					});
+				});
+			};
+			console.log(cornerstoneTools);
+
+			const firstElement = document.getElementById('first-element');
+			const secondElement = document.getElementById('second-element');
+			InitAndLoadData(firstElement);
+			InitAndLoadData(secondElement);
+		</script>
+	</body>
+</html>
